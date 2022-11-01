@@ -37,8 +37,20 @@ const testBinanceFuturesSinais = (message) => {
   signal.takeProfitPrice = arrString[9]
     .slice(arrString[9].indexOf("TARGET 1 -") + 10, arrString[9].length)
     .replaceAll(" ", "");
-  return signal;
+  return isAllProperiesValid(signal);
 };
+
+
+const isAllProperiesValid = (signal) => {
+  if (!signal.quantity) return false
+  if (!signal.side === 'BUY' || !signal.side === 'SELL') return false
+  if (!signal.symbol) return false
+  if (!signal.entryPrice) return false
+  if (!signal.leverage) return false
+  if (!signal.stopLossPrice) return false
+  if (!signal.takeProfitPrice) return false
+  return signal
+}
 
 
 module.exports = {

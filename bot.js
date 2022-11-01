@@ -18,9 +18,18 @@ const messageRecived = async (message) => {
   if (signal) {
     try {
       // Este método deve sair futuramente
+
+      const ordersBefore = await futureClient.getAllOpenOrders({
+        symbol: signal.symbol
+      })
+
+      console.log('Orders Before', ordersBefore)
+
+
       await futureClient.cancelAllOpenOrders({
         symbol: signal.symbol,
       });
+
 
       try {
         await futureClient.setMarginType({
@@ -97,6 +106,11 @@ const messageRecived = async (message) => {
             symbol: signal.symbol,
           });
         } else {
+          const ordersAfter = await futureClient.getAllOpenOrders({
+            symbol: signal.symbol
+          })
+    
+          console.log('Orders after', ordersAfter)
           console.log("Sinal Enviado para a corretora");
         }
       } catch (error) {
