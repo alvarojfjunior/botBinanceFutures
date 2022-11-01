@@ -1,6 +1,8 @@
 const isValidSignal = (message) => {
   if (!message) return false;
+
   const isBinanceFuturesSinais = testBinanceFuturesSinais(message);
+  
   if (isBinanceFuturesSinais) return isBinanceFuturesSinais;
   else return false;
 };
@@ -9,6 +11,7 @@ const testBinanceFuturesSinais = (message) => {
   const arrString = String(message.message).split(/\r?\n/);
   if (arrString[0] !== "👉 NOVO SINAL DE ENTRADA 🤑") return false;
   let signal = {};
+  
   const entryPrice = arrString[4]
     .slice(arrString[4].indexOf("Pontos de entrada:") + 18, arrString[4].length)
     .replaceAll("🟢", "")
@@ -17,6 +20,7 @@ const testBinanceFuturesSinais = (message) => {
   signal.quantity = parseFloat(
     parseInt(process.env.USDTENTRY) / parseFloat(entryPrice)
   ).toFixed(0);
+
   signal.side = arrString[2].indexOf("LONG") ? "BUY" : "SELL";
   signal.symbol = arrString[1]
     .slice(arrString[1].indexOf("#") + 1, arrString[1].length)
@@ -35,6 +39,7 @@ const testBinanceFuturesSinais = (message) => {
     .replaceAll(" ", "");
   return signal;
 };
+
 
 module.exports = {
   isValidSignal,

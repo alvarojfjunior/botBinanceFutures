@@ -3,8 +3,8 @@ const dotenv = require("dotenv");
 dotenv.config();
 const { USDMClient } = require("binance");
 
-const key = process.env.APIKEY;
-const secret = process.env.APISECRET;
+const key = process.env.BINANCEAPIKEY;
+const secret = process.env.BINANCEAPISECRET;
 
 const futureClient = new USDMClient({
   api_key: key,
@@ -14,8 +14,10 @@ const futureClient = new USDMClient({
 
 const messageRecived = async (message) => {
   const signal = isValidSignal(message);
+  
   if (signal) {
     try {
+      // Este método deve sair futuramente
       await futureClient.cancelAllOpenOrders({
         symbol: signal.symbol,
       });
