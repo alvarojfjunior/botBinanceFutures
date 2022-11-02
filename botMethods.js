@@ -1,42 +1,35 @@
+const dotenv = require("dotenv");
+dotenv.config();
+
+const { assetsMinValue } = require("./utils")
+
+const unidade = parseInt(process.env.UNIDADE);
+
 const isValidSignal = (message) => {
   if (!message) return false;
 
-  const isBinanceFuturesSinais = testBinanceFuturesSinais(message);
+  const isSignal = testSignal(message);
   
-  if (isBinanceFuturesSinais) return isBinanceFuturesSinais;
+  if (isSignal) return isSignal;
   else return false;
 };
 
-const testBinanceFuturesSinais = (message) => {
+const testSignal = (message) => {
   const arrString = String(message.message).split(/\r?\n/);
-  if (arrString[0] !== "👉 NOVO SINAL DE ENTRADA 🤑") return false;
-  let signal = {};
-  
-  const entryPrice = arrString[4]
-    .slice(arrString[4].indexOf("Pontos de entrada:") + 18, arrString[4].length)
-    .replaceAll("🟢", "")
-    .replaceAll(" ", "");
-  //Mínimo 5 dólares na moeda
-  signal.quantity = parseFloat(
-    parseInt(process.env.USDTENTRY) / parseFloat(entryPrice)
-  ).toFixed(0);
+  let signal = {}
+  const leverage = arrString[6].slice(arrString[6].indexOf(':')+2, arrString[6].length)
+  const quantity = String((parseFloat(arrString[10].slice(arrString[10].indexOf(':')+2, arrString[10].length)) * unidade) * parseInt(leverage))
+  const symbol = arrString[4].slice(arrString[4].indexOf(':')+2, arrString[4].length)
+  const minTrade = assetsMinValue.find(e=> e.asset === symbol).value
+  const decimal = minTrade.indexOf('.') < 0 ? 0 : minTrade.length -1 - minTrade.indexOf('.')
+  signal.quantity = parseFloat(quantity).toFixed(decimal)
+  signal.side = arrString[3].slice(arrString[3].indexOf(':')+2, arrString[3].length)
+  signal.symbol = symbol
+  signal.entryPrice = arrString[5].slice(arrString[5].indexOf(':')+2, arrString[5].length)
+  signal.takeProfitPrice = arrString[8].slice(arrString[8].indexOf(':')+2, arrString[8].length)
+  signal.stopLossPrice = arrString[7].slice(arrString[7].indexOf(':')+2, arrString[7].length)
+  signal.leverage = arrString[6].slice(arrString[6].indexOf(':')+2, arrString[6].length)
 
-  signal.side = arrString[2].indexOf("LONG") ? "BUY" : "SELL";
-  signal.symbol = arrString[1]
-    .slice(arrString[1].indexOf("#") + 1, arrString[1].length)
-    .replace("/", "")
-    .replaceAll(" ", "");
-  signal.entryPrice = entryPrice;
-  signal.leverage = arrString[3]
-    .slice(arrString[3].indexOf("Alavancagem:") + 12, arrString[3].length)
-    .replaceAll(" ", "");
-  signal.stopLossPrice = arrString[6]
-    .slice(arrString[6].indexOf("StopLoss:") + 9, arrString[6].length)
-    .replaceAll("💥", "")
-    .replaceAll(" ", "");
-  signal.takeProfitPrice = arrString[9]
-    .slice(arrString[9].indexOf("TARGET 1 -") + 10, arrString[9].length)
-    .replaceAll(" ", "");
   return isAllProperiesValid(signal);
 };
 

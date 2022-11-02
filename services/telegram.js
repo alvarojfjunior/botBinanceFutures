@@ -11,9 +11,7 @@ moment.locale("pt-br");
 
 const telegramApiId = parseInt(process.env.TELEGRAMAPIID);
 const telegramApiHash = process.env.TELEGRAMAPIHASH;
-const stringSession = new StringSession(
-  "1AQAOMTQ5LjE1NC4xNzUuNTIBuy2JZc3m5lgWgvCqAGC6t1/Gpit4cIRK12Lz/j46/Mn+yqRp/5xKWNAC27Txly9KBRSFHJSuwxtxArgQlegTiDMPbHdB+PdNnw3tZz/53H/eMh00TYwZ4pfcL0uKe8rPIqnWonIl7qH23cybAEPXGzqsLNKyoxWTMkowv8EKcTijS9AqOHnPZLUXFhkeiOgJ3u46uinqBPC4hH4rpYK+ZST5oxLjt9/X5q+Pwwz2ELdYq4t+aduMpXZ//nmFkqDjbR4rfKki1XHC2WbiGk9D4A24FkRWzEldxZiAlSM91Z1pBJAKXQwWv5tOmTVUTI/NCKxOqjahVYEfHrF/saek9JE="
-);
+const stringSession = new StringSession(process.env.TELEGRAMSTRINGSESSION);
 
 const client = new TelegramClient(stringSession, telegramApiId, telegramApiHash, {
   connectionRetries: 5,
@@ -33,13 +31,15 @@ const startTelegram = async () => {
     return;
   }
 
+  console.log('TELEGRAMSTRINGSESSION= ', client.session.save())
+
   // Listen messages
   client.addEventHandler(async ({ message }) => {
     await messageRecived({
       date: message.date,
       message: message.message,
     });
-  }, new NewMessage({ chats: [-1726157437, 5638057854] }));
+  }, new NewMessage({ chats: [-816838568] }));
 };
 
 module.exports = {

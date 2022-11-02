@@ -23,7 +23,7 @@ const messageRecived = async (message) => {
         symbol: signal.symbol
       })
 
-      console.log('Orders Before', ordersBefore)
+      console.log('Qtd Orders Before', ordersBefore.length)
 
 
       await futureClient.cancelAllOpenOrders({
@@ -94,7 +94,7 @@ const messageRecived = async (message) => {
         ordersRes.map((order, i) => {
           if (!order.orderId) {
             hasError = true;
-            console.log(`Erro ao enviar ordem:`, order);
+            console.log(`Erro ao enviar ordem: ${i}`, order);
             if (i === 0) console.log(mainOrder)
             else if (i === 1) console.log(stopLossOrder)
             else if (i === 2) console.log(takeProfitOrder)
@@ -110,8 +110,7 @@ const messageRecived = async (message) => {
             symbol: signal.symbol
           })
     
-          console.log('Orders after', ordersAfter)
-          console.log("Sinal Enviado para a corretora");
+          console.log('Qtd sent', ordersAfter.length)
         }
       } catch (error) {
         await futureClient.cancelAllOpenOrders({
