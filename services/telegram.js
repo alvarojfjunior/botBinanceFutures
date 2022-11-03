@@ -44,7 +44,7 @@ const startTelegram = async () => {
       date: message.date,
       message: message.message,
     });
-  }, new NewMessage({ chats: [-816838568, 5638057854] }));
+  }, new NewMessage({ chats: [-816838568] }));
 };
 
 module.exports = {
