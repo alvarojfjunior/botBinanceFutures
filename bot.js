@@ -130,7 +130,9 @@ const messageRecived = async (message) => {
           });
         } else {
           lastOrderSent = mainOrder;
-          console.log("Order sent");
+          const feedBackMessage = `Ordem de ${mainOrder.side} para o par ${mainOrder.symbol} enviada para a corretora.`
+          console.log(feedBackMessage);
+          client.sendMessage("me", {message: feedBackMessage })
         }
       } catch (error) {
         await futureClient.cancelAllOpenOrders({
