@@ -48,7 +48,7 @@ const messageRecived = async (message) => {
       }
 
       console.log('Vlr ordem:', signal.quantityUSDT,  'Saldo', availableWalletUSDT)
-      if (parseFloat(signal.quantityUSDT) < parseFloat(availableWalletUSDT)) {
+      if (parseFloat(signal.quantityUSDT) > parseFloat(availableWalletUSDT)) {
         console.log("Ordem não executada por falta de saldo.");
         return;
       }
