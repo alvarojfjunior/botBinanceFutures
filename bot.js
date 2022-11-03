@@ -1,6 +1,7 @@
 const { isValidSignal } = require("./botMethods.js");
 const dotenv = require("dotenv");
 dotenv.config();
+const { client } = require("./services/telegram")
 const { USDMClient, WebsocketClient, DefaultLogger } = require("binance");
 
 const key = process.env.BINANCEAPIKEY;
@@ -171,7 +172,6 @@ const activeListeners = async () => {
   await updateWalletAndOpenOrders();
 
   wsClient.on("formattedMessage", async (data) => {
-    console.log(data);
     if (data.eventType === "ORDER_TRADE_UPDATE") {
       //se bater o win ou los, realizar o cancelamento de todas as demais entradas.
       await updateWalletAndOpenOrders();
@@ -196,10 +196,16 @@ const updateWalletAndOpenOrders = async () => {
         openOrders[0].side === "BUY" &&
         openOrders[0].stopPrice > parseFloat(lastOrderSent.price)
       ) {
-        console.log("Ordem com lucro");
+        const feedBackMessage = (`Ordem ${openOrders[0].symbol} com lucro, saldo atual: ${availableWalletUSDT}`);
+        console.log(feedBackMessage)
+        client.sendMessage("me", {message: feedBackMessage })
       } else {
-        console.log("Ordem com prejuízo");
+        const feedBackMessage = (`Ordem ${openOrders[0].symbol} com prejuízo, saldo atual: ${availableWalletUSDT}`);
+        console.log(feedBackMessage)
+        client.sendMessage("me", {message: feedBackMessage })
       }
+    } else if (openOrders.length === 3) {
+      //verificar se a ordem tem mais de 30 minutos, se sim, cancela
     }
     console.log("Wallet availble USDT: ", availableWalletUSDT);
     console.log("Open Orders: ", openOrders.length);

@@ -44,4 +44,5 @@ const startTelegram = async () => {
 
 module.exports = {
   startTelegram,
+  client
 };
