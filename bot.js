@@ -1,7 +1,7 @@
 const { isValidSignal } = require("./botMethods.js");
 const dotenv = require("dotenv");
 dotenv.config();
-const { USDMClient } = require("binance");
+const { USDMClient, WebsocketClient, DefaultLogger } = require("binance");
 
 const key = process.env.BINANCEAPIKEY;
 const secret = process.env.BINANCEAPISECRET;
@@ -12,24 +12,46 @@ const futureClient = new USDMClient({
   beautifyResponses: true,
 });
 
+const wsClient = new WebsocketClient(
+  {
+    api_key: key,
+    api_secret: secret,
+    beautify: true,
+    // Disable ping/pong ws heartbeat mechanism (not recommended)
+    // disableHeartbeat: true
+  },
+  {
+    ...DefaultLogger,
+    silly: (...params) => {},
+  }
+);
+
+let availableWalletUSDT = 0;
+let openOrders = [];
+let isReady = false
+
 const messageRecived = async (message) => {
+  if (!isReady) {
+    console.log('Sinal chegou cedo de mais, o bot ainda não está pronto')
+    return
+  }
+
   const signal = isValidSignal(message);
-  
+
   if (signal) {
     try {
-      // Este método deve sair futuramente
+      if (openOrders.length > 0) {
+        console.log(
+          "Ordem não executada por já existir ordem em aberto na Binance."
+        );
+        return;
+      }
 
-      const ordersBefore = await futureClient.getAllOpenOrders({
-        symbol: signal.symbol
-      })
-
-      console.log('Qtd Orders Before', ordersBefore.length)
-
-
-      await futureClient.cancelAllOpenOrders({
-        symbol: signal.symbol,
-      });
-
+      console.log('Vlr ordem:', signal.quantityUSDT,  'Saldo', availableWalletUSDT)
+      if (parseFloat(signal.quantityUSDT) < parseFloat(availableWalletUSDT)) {
+        console.log("Ordem não executada por falta de saldo.");
+        return;
+      }
 
       try {
         await futureClient.setMarginType({
@@ -95,9 +117,9 @@ const messageRecived = async (message) => {
           if (!order.orderId) {
             hasError = true;
             console.log(`Erro ao enviar ordem: ${i}`, order);
-            if (i === 0) console.log(mainOrder)
-            else if (i === 1) console.log(stopLossOrder)
-            else if (i === 2) console.log(takeProfitOrder)
+            if (i === 0) console.log(mainOrder);
+            else if (i === 1) console.log(stopLossOrder);
+            else if (i === 2) console.log(takeProfitOrder);
           }
         });
 
@@ -107,10 +129,10 @@ const messageRecived = async (message) => {
           });
         } else {
           const ordersAfter = await futureClient.getAllOpenOrders({
-            symbol: signal.symbol
-          })
-    
-          console.log('Qtd sent', ordersAfter.length)
+            symbol: signal.symbol,
+          });
+
+          console.log("Qtd sent", ordersAfter.length);
         }
       } catch (error) {
         await futureClient.cancelAllOpenOrders({
@@ -124,10 +146,60 @@ const messageRecived = async (message) => {
   } else {
     console.log("This message isn't a signal");
   }
+};
 
-  //postRequest()
+const activeListeners = async () => {
+  // read response to command sent via WS stream (e.g LIST_SUBSCRIPTIONS)
+  wsClient.on("reply", (data) => {
+    console.log("log reply: ", JSON.stringify(data, null, 2));
+  });
+
+  // receive notification when a ws connection is reconnecting automatically
+  wsClient.on("reconnecting", (data) => {
+    console.log("ws automatically reconnecting.... ", data?.wsKey);
+  });
+
+  // receive notification that a reconnection completed successfully (e.g use REST to check for missing data)
+  wsClient.on("reconnected", (data) => {
+    console.log("ws has reconnected ", data?.wsKey);
+  });
+
+  // Recommended: receive error events (e.g. first reconnection failed)
+  wsClient.on("error", (data) => {
+    console.log("ws saw error ", data?.wsKey);
+  });
+
+  await wsClient.subscribeUsdFuturesUserDataStream();
+
+  await updateWalletAndOpenOrders();
+
+  wsClient.on("formattedMessage", async (data) => {
+    console.log(data);
+    if (data.eventType === "ORDER_TRADE_UPDATE") {
+      //se bater o win ou los, realizar o cancelamento de todas as demais entradas.
+      await updateWalletAndOpenOrders();
+    }
+  });
+};
+
+//verificar o tempo das ordens em aberto, se tiver 3 com mais de 30 minutos, cancelá-las para liberar banca.
+
+const updateWalletAndOpenOrders = async () => {
+  try {
+    const allBalance = await futureClient.getBalance();
+    allBalance.forEach((asset) => {
+      if (asset.asset === "USDT") availableWalletUSDT = parseFloat(asset.availableBalance).toFixed(2);
+    });
+    openOrders = await futureClient.getAllOpenOrders();
+    console.log("Wallet availble USDT: ", availableWalletUSDT);
+    console.log("Open Orders: ", openOrders);
+    isReady = true
+  } catch (error) {
+    console.log("Error to update wallet and open orders.");
+  }
 };
 
 module.exports = {
   messageRecived,
+  activeListeners,
 };
