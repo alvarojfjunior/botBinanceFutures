@@ -2,9 +2,11 @@ const { isValidSignal } = require("./botMethods.js");
 const dotenv = require("dotenv");
 dotenv.config();
 const { USDMClient, WebsocketClient, DefaultLogger } = require("binance");
+const { minutesDiference, secondsDiference } = require("./utils.js");
 
 const key = process.env.BINANCEAPIKEY;
 const secret = process.env.BINANCEAPISECRET;
+const isAdmin = process.env.ISADMIN;
 
 const futureClient = new USDMClient({
   api_key: key,
@@ -31,12 +33,13 @@ let openOrders = [];
 let lastOrderSent = {};
 let isReady = false;
 let client = null;
+let lastNotify = new Date();
 
 const messageRecived = async (message) => {
   client = message.client;
-  
+
   if (!isReady) {
-    console.log("Sinal chegou cedo de mais, o bot ainda não está pronto");
+    console.log("Sinal recusado pelo bot");
     return;
   }
 
@@ -55,6 +58,8 @@ const messageRecived = async (message) => {
         console.log("Ordem não executada por falta de saldo.");
         return;
       }
+
+      isReady = false;
 
       try {
         await futureClient.setMarginType({
@@ -133,16 +138,19 @@ const messageRecived = async (message) => {
         } else {
           lastOrderSent = mainOrder;
           const feedBackMessage = `Ordem de ${mainOrder.side} para o par ${mainOrder.symbol} enviada para a corretora.`;
-          console.log(feedBackMessage);
-          client && client.sendMessage("me", { message: feedBackMessage });
+          notifyUser(feedBackMessage);
+          isReady = true;
         }
       } catch (error) {
         await futureClient.cancelAllOpenOrders({
           symbol: signal.symbol,
         });
         console.log("houve um problema para enviar os sinais", error);
+        isReady = true;
       }
+      isReady = true;
     } catch (error) {
+      isReady = true;
       console.log(error);
     }
   } else {
@@ -151,71 +159,95 @@ const messageRecived = async (message) => {
 };
 
 const activeListeners = async () => {
-  // read response to command sent via WS stream (e.g LIST_SUBSCRIPTIONS)
   wsClient.on("reply", (data) => {
     console.log("log reply: ", JSON.stringify(data, null, 2));
   });
-
-  // receive notification when a ws connection is reconnecting automatically
   wsClient.on("reconnecting", (data) => {
     console.log("ws automatically reconnecting.... ", data?.wsKey);
   });
-
-  // receive notification that a reconnection completed successfully (e.g use REST to check for missing data)
   wsClient.on("reconnected", (data) => {
     console.log("ws has reconnected ", data?.wsKey);
   });
-
-  // Recommended: receive error events (e.g. first reconnection failed)
   wsClient.on("error", (data) => {
     console.log("ws saw error ", data?.wsKey);
   });
-
   await wsClient.subscribeUsdFuturesUserDataStream();
-
   await updateWalletAndOpenOrders();
 
   wsClient.on("formattedMessage", async (data) => {
+    console.log(data.eventType);
     if (data.eventType === "ORDER_TRADE_UPDATE") {
       //se bater o win ou los, realizar o cancelamento de todas as demais entradas.
       await updateWalletAndOpenOrders();
+      await verifyAndCancelOrdes();
     }
   });
 };
 
 //verificar o tempo das ordens em aberto, se tiver 3 com mais de 30 minutos, cancelá-las para liberar banca.
-
 const updateWalletAndOpenOrders = async () => {
   try {
+    isReady = false;
     const allBalance = await futureClient.getBalance();
     allBalance.forEach((asset) => {
       if (asset.asset === "USDT")
         availableWalletUSDT = parseFloat(asset.availableBalance).toFixed(2);
     });
     openOrders = await futureClient.getAllOpenOrders();
-    if (openOrders.length === 1) {
-      await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
-
-      if (
-        openOrders[0].side === "BUY" &&
-        openOrders[0].stopPrice > parseFloat(lastOrderSent.price)
-      ) {
-        const feedBackMessage = `Ordem ${openOrders[0].symbol} com lucro, saldo atual: ${availableWalletUSDT}`;
-        console.log(feedBackMessage);
-        client && client.sendMessage("me", { message: feedBackMessage });
-      } else {
-        const feedBackMessage = `Ordem ${openOrders[0].symbol} com prejuízo, saldo atual: ${availableWalletUSDT}`;
-        console.log(feedBackMessage);
-        client && client.sendMessage("me", { message: feedBackMessage });
-      }
-    } else if (openOrders.length === 3) {
-      //verificar se a ordem tem mais de 30 minutos, se sim, cancela
-    }
-    console.log("Wallet availble USDT: ", availableWalletUSDT);
-    console.log("Open Orders: ", openOrders.length);
+    if (openOrders.length > 0) await verifyAndCancelOrdes();
     isReady = true;
   } catch (error) {
+    isReady = true;
     console.log("Error to update wallet and open orders.");
+  }
+};
+
+const verifyAndCancelOrdes = async () => {
+  //Cancel protections
+  if (openOrders.length === 1) {
+    await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
+    if (
+      openOrders[0].side === "BUY" &&
+      openOrders[0].stopPrice > parseFloat(lastOrderSent.price)
+    ) {
+      const feedBackMessage = `Ordem ${openOrders[0].side} - ${openOrders[0].symbol} com lucro, saldo atual: ${availableWalletUSDT}`;
+      notifyUser(feedBackMessage, true);
+    } else {
+      const feedBackMessage = `Ordem ${openOrders[0].side} - ${openOrders[0].symbol} com prejuízo, saldo atual: ${availableWalletUSDT}`;
+      notifyUser(feedBackMessage, true);
+    }
+  }
+
+  //Cancel old signal if diference is bigest 30 minutes
+  else if (openOrders.length === 3) {
+    try {
+      const signalDate = new Date(openOrders[0].time * 1000);
+      const nowDate = new Date();
+      const difMinutes = minutesDiference(signalDate, nowDate);
+      if (difMinutes >= 30) {
+        await futureClient.cancelAllOpenOrders({
+          symbol: openOrders[0].symbol,
+        });
+        console.log('O bot cancelou uma ordem que estava a muito tempo para entrar.')
+      }
+    } catch (error) {
+      console.log("Houve um erro ao finalizar as ordens paradas");
+    }
+  }
+};
+
+const notifyUser = (message, sendToGrup = false) => {
+  const secondsLastNotify = secondsDiference(lastNotify, new Date());
+  if (secondsLastNotify >= 3) {
+    console.log(message);
+    if (client) {
+      client.sendMessage("me", { message });
+      if (sendToGrup && isAdmin == true)
+        client.sendMessage(816838568, {
+          message: message.slice(0, message.indexOf(",") - 1),
+        });
+    }
+    lastNotify = new Date();
   }
 };
 
