@@ -1,8 +1,6 @@
 const dotenv = require("dotenv");
 dotenv.config();
 
-const { assetsMinValue } = require("./utils")
-
 const unidade = parseInt(process.env.UNIDADE);
 
 const isValidSignal = (message) => {
@@ -20,9 +18,7 @@ const testSignal = (message) => {
   const leverage = arrString[6].slice(arrString[6].indexOf(':')+2, arrString[6].length)
   const quantity = String((parseFloat(arrString[10].slice(arrString[10].indexOf(':')+2, arrString[10].length)) * unidade) * parseInt(leverage))
   const symbol = arrString[4].slice(arrString[4].indexOf(':')+2, arrString[4].length)
-  const minTrade = assetsMinValue.find(e=> e.asset === symbol).value
-  const decimal = minTrade.indexOf('.') < 0 ? 0 : minTrade.length -1 - minTrade.indexOf('.')
-  signal.quantity = parseFloat(quantity).toFixed(decimal)
+  signal.quantity = parseFloat(quantity)
   signal.side = arrString[3].slice(arrString[3].indexOf(':')+2, arrString[3].length)
   signal.symbol = symbol
   signal.entryPrice = arrString[5].slice(arrString[5].indexOf(':')+2, arrString[5].length)
