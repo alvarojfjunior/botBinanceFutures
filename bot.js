@@ -1,7 +1,6 @@
 const { isValidSignal } = require("./botMethods.js");
 const dotenv = require("dotenv");
 dotenv.config();
-const { client } = require("./services/telegram")
 const { USDMClient, WebsocketClient, DefaultLogger } = require("binance");
 
 const key = process.env.BINANCEAPIKEY;
@@ -31,8 +30,11 @@ let availableWalletUSDT = 0;
 let openOrders = [];
 let lastOrderSent = {};
 let isReady = false;
+let client = null;
 
 const messageRecived = async (message) => {
+  client = message.client;
+  
   if (!isReady) {
     console.log("Sinal chegou cedo de mais, o bot ainda não está pronto");
     return;
@@ -130,9 +132,9 @@ const messageRecived = async (message) => {
           });
         } else {
           lastOrderSent = mainOrder;
-          const feedBackMessage = `Ordem de ${mainOrder.side} para o par ${mainOrder.symbol} enviada para a corretora.`
+          const feedBackMessage = `Ordem de ${mainOrder.side} para o par ${mainOrder.symbol} enviada para a corretora.`;
           console.log(feedBackMessage);
-          client.sendMessage("me", {message: feedBackMessage })
+          client && client.sendMessage("me", { message: feedBackMessage });
         }
       } catch (error) {
         await futureClient.cancelAllOpenOrders({
@@ -198,13 +200,13 @@ const updateWalletAndOpenOrders = async () => {
         openOrders[0].side === "BUY" &&
         openOrders[0].stopPrice > parseFloat(lastOrderSent.price)
       ) {
-        const feedBackMessage = (`Ordem ${openOrders[0].symbol} com lucro, saldo atual: ${availableWalletUSDT}`);
-        console.log(feedBackMessage)
-        client.sendMessage("me", {message: feedBackMessage })
+        const feedBackMessage = `Ordem ${openOrders[0].symbol} com lucro, saldo atual: ${availableWalletUSDT}`;
+        console.log(feedBackMessage);
+        client && client.sendMessage("me", { message: feedBackMessage });
       } else {
-        const feedBackMessage = (`Ordem ${openOrders[0].symbol} com prejuízo, saldo atual: ${availableWalletUSDT}`);
-        console.log(feedBackMessage)
-        client.sendMessage("me", {message: feedBackMessage })
+        const feedBackMessage = `Ordem ${openOrders[0].symbol} com prejuízo, saldo atual: ${availableWalletUSDT}`;
+        console.log(feedBackMessage);
+        client && client.sendMessage("me", { message: feedBackMessage });
       }
     } else if (openOrders.length === 3) {
       //verificar se a ordem tem mais de 30 minutos, se sim, cancela

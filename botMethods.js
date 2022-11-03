@@ -13,6 +13,9 @@ const isValidSignal = (message) => {
 
 const testSignal = (message) => {
   const arrString = String(message.message).split(/\r?\n/);
+
+  if (arrString.length < 2) return false
+
   let signal = {};
   const leverage = arrString[6].slice(
     arrString[6].indexOf(":") + 2,

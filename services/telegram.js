@@ -6,16 +6,20 @@ const input = require("input");
 const dotenv = require("dotenv");
 dotenv.config();
 const { messageRecived } = require("../bot.js");
-
 moment.locale("pt-br");
 
 const telegramApiId = parseInt(process.env.TELEGRAMAPIID);
 const telegramApiHash = process.env.TELEGRAMAPIHASH;
 const stringSession = new StringSession(process.env.TELEGRAMSTRINGSESSION);
 
-const client = new TelegramClient(stringSession, telegramApiId, telegramApiHash, {
-  connectionRetries: 5,
-});
+const client = new TelegramClient(
+  stringSession,
+  telegramApiId,
+  telegramApiHash,
+  {
+    connectionRetries: 5,
+  }
+);
 
 const startTelegram = async () => {
   try {
@@ -31,18 +35,18 @@ const startTelegram = async () => {
     return;
   }
 
-  console.log('TELEGRAMSTRINGSESSION= ', client.session.save())
+  console.log("TELEGRAMSTRINGSESSION= ", client.session.save());
 
   // Listen messages
   client.addEventHandler(async ({ message }) => {
     await messageRecived({
+      client: client,
       date: message.date,
       message: message.message,
     });
-  }, new NewMessage({ chats: [-816838568] }));
+  }, new NewMessage({ chats: [-816838568, 5638057854] }));
 };
 
 module.exports = {
   startTelegram,
-  client
 };
