@@ -1,7 +1,7 @@
 const dotenv = require("dotenv");
 dotenv.config();
 
-const unidade = parseInt(process.env.UNIDADE);
+const unidade = parseFloat(process.env.UNIDADE);
 
 const isValidSignal = (message) => {
   if (!message) return false;
@@ -16,9 +16,11 @@ const testSignal = (message) => {
   const arrString = String(message.message).split(/\r?\n/);
   let signal = {}
   const leverage = arrString[6].slice(arrString[6].indexOf(':')+2, arrString[6].length)
-  const quantity = String((parseFloat(arrString[10].slice(arrString[10].indexOf(':')+2, arrString[10].length)) * unidade) * parseInt(leverage))
+  const strQtdr = String((parseFloat(arrString[10].slice(arrString[10].indexOf(':')+2, arrString[10].length))));
+  const assetDecimal = strQtdr.length - 1 - strQtdr.indexOf('.')
+  const quantity = ((parseFloat(strQtdr) * unidade) * parseInt(leverage)).toFixed(assetDecimal)
   const symbol = arrString[4].slice(arrString[4].indexOf(':')+2, arrString[4].length)
-  signal.quantity = parseFloat(quantity)
+  signal.quantity = quantity
   signal.side = arrString[3].slice(arrString[3].indexOf(':')+2, arrString[3].length)
   signal.symbol = symbol
   signal.entryPrice = arrString[5].slice(arrString[5].indexOf(':')+2, arrString[5].length)
