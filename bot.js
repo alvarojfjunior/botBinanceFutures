@@ -28,12 +28,13 @@ const wsClient = new WebsocketClient(
 
 let availableWalletUSDT = 0;
 let openOrders = [];
-let isReady = false
+let lastOrderSent = {};
+let isReady = false;
 
 const messageRecived = async (message) => {
   if (!isReady) {
-    console.log('Sinal chegou cedo de mais, o bot ainda não está pronto')
-    return
+    console.log("Sinal chegou cedo de mais, o bot ainda não está pronto");
+    return;
   }
 
   const signal = isValidSignal(message);
@@ -47,7 +48,6 @@ const messageRecived = async (message) => {
         return;
       }
 
-      console.log('Vlr ordem:', signal.quantityUSDT,  'Saldo', availableWalletUSDT)
       if (parseFloat(signal.quantityUSDT) > parseFloat(availableWalletUSDT)) {
         console.log("Ordem não executada por falta de saldo.");
         return;
@@ -128,11 +128,8 @@ const messageRecived = async (message) => {
             symbol: signal.symbol,
           });
         } else {
-          const ordersAfter = await futureClient.getAllOpenOrders({
-            symbol: signal.symbol,
-          });
-
-          console.log("Qtd sent", ordersAfter.length);
+          lastOrderSent = mainOrder;
+          console.log("Order sent");
         }
       } catch (error) {
         await futureClient.cancelAllOpenOrders({
@@ -188,12 +185,25 @@ const updateWalletAndOpenOrders = async () => {
   try {
     const allBalance = await futureClient.getBalance();
     allBalance.forEach((asset) => {
-      if (asset.asset === "USDT") availableWalletUSDT = parseFloat(asset.availableBalance).toFixed(2);
+      if (asset.asset === "USDT")
+        availableWalletUSDT = parseFloat(asset.availableBalance).toFixed(2);
     });
     openOrders = await futureClient.getAllOpenOrders();
+    if (openOrders.length === 1) {
+      await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
+
+      if (
+        openOrders[0].side === "BUY" &&
+        openOrders[0].stopPrice > parseFloat(lastOrderSent.price)
+      ) {
+        console.log("Ordem com lucro");
+      } else {
+        console.log("Ordem com prejuízo");
+      }
+    }
     console.log("Wallet availble USDT: ", availableWalletUSDT);
-    console.log("Open Orders: ", openOrders);
-    isReady = true
+    console.log("Open Orders: ", openOrders.length);
+    isReady = true;
   } catch (error) {
     console.log("Error to update wallet and open orders.");
   }
