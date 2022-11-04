@@ -37,6 +37,12 @@ const startTelegram = async () => {
 
   console.log("TELEGRAMSTRINGSESSION= ", client.session.save());
 
+  await messageRecived({
+    client: client,
+    date: new Date().getTime(),
+    message: 'Bot iniciado',
+  });
+
   // Listen messages
   client.addEventHandler(async ({ message }) => {
     await messageRecived({

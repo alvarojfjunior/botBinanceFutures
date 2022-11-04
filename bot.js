@@ -6,7 +6,6 @@ const { minutesDiference, secondsDiference } = require("./utils.js");
 
 const key = process.env.BINANCEAPIKEY;
 const secret = process.env.BINANCEAPISECRET;
-const isAdmin = process.env.ISADMIN;
 
 const futureClient = new USDMClient({
   api_key: key,
@@ -33,7 +32,7 @@ let openOrders = [];
 let lastOrderSent = {};
 let isReady = false;
 let client = null;
-let lastNotify = new Date();
+let lastNotify = new Date(new Date().getTime() - 10000);
 
 const messageRecived = async (message) => {
   client = message.client;
@@ -174,8 +173,9 @@ const activeListeners = async () => {
   await wsClient.subscribeUsdFuturesUserDataStream();
   await updateWalletAndOpenOrders();
 
+  notifyUser(`**Bot iniciado!**\n${openOrders.length / 2} orden(s) abertas.\nSaldo de ${availableWalletUSDT}`);
+
   wsClient.on("formattedMessage", async (data) => {
-    console.log(data.eventType);
     if (data.eventType === "ORDER_TRADE_UPDATE") {
       //se bater o win ou los, realizar o cancelamento de todas as demais entradas.
       await updateWalletAndOpenOrders();
@@ -195,6 +195,13 @@ const updateWalletAndOpenOrders = async () => {
     });
     openOrders = await futureClient.getAllOpenOrders();
     if (openOrders.length > 0) await verifyAndCancelOrdes();
+    else
+      console.log(
+        openOrders.length,
+        "Ordens em aberto",
+        "Saldo USDT: ",
+        availableWalletUSDT
+      );
     isReady = true;
   } catch (error) {
     isReady = true;
@@ -211,10 +218,10 @@ const verifyAndCancelOrdes = async () => {
       openOrders[0].stopPrice > parseFloat(lastOrderSent.price)
     ) {
       const feedBackMessage = `Ordem ${openOrders[0].side} - ${openOrders[0].symbol} com lucro, saldo atual: ${availableWalletUSDT}`;
-      notifyUser(feedBackMessage, true);
+      notifyUser(feedBackMessage);
     } else {
       const feedBackMessage = `Ordem ${openOrders[0].side} - ${openOrders[0].symbol} com prejuízo, saldo atual: ${availableWalletUSDT}`;
-      notifyUser(feedBackMessage, true);
+      notifyUser(feedBackMessage);
     }
   }
 
@@ -228,25 +235,33 @@ const verifyAndCancelOrdes = async () => {
         await futureClient.cancelAllOpenOrders({
           symbol: openOrders[0].symbol,
         });
-        console.log('O bot cancelou uma ordem que estava a muito tempo para entrar.')
+        console.log(
+          "O bot cancelou uma ordem que estava a muito tempo para entrar."
+        );
       }
     } catch (error) {
       console.log("Houve um erro ao finalizar as ordens paradas");
     }
   }
+
+  console.log(
+    openOrders.length,
+    "Ordens em aberto",
+    "Saldo USDT: ",
+    availableWalletUSDT
+  );
 };
 
-const notifyUser = (message, sendToGrup = false) => {
+const notifyUser = (message) => {
   const secondsLastNotify = secondsDiference(lastNotify, new Date());
   if (secondsLastNotify >= 3) {
     console.log(message);
-    if (client) {
-      client.sendMessage("me", { message });
-      if (sendToGrup && isAdmin == true)
-        client.sendMessage(816838568, {
-          message: message.slice(0, message.indexOf(",") - 1),
-        });
-    }
+    setTimeout(function () {
+      if (client) {
+        client.sendMessage("me", { message });
+      }
+    }, 3000);
+
     lastNotify = new Date();
   }
 };
