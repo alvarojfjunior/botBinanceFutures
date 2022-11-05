@@ -203,7 +203,7 @@ const startBot = async (telegramClientt) => {
 
     let botStartMessage = `✅**O bot agora está RODANDO!**✅\n`;
     botStartMessage += `\nExiste uma orden aberta.`;
-    botStartMessage += `\nSaldo de ${availableWalletUSDT} 🤑`;
+    botStartMessage += `\nSaldo de USD ${availableWalletUSDT} 🤑`;
     botStartMessage += `\nEnvie 'stop' ou 'start' quando quiser para alterar seu status.`;
 
     notifyUser(botStartMessage);
