@@ -3,6 +3,7 @@ const dotenv = require("dotenv");
 dotenv.config();
 const { USDMClient, WebsocketClient, DefaultLogger } = require("binance");
 const { minutesDiference, secondsDiference } = require("./utils.js");
+const { NewMessage } = require("telegram/events/NewMessage.js");
 
 const key = process.env.BINANCEAPIKEY;
 const secret = process.env.BINANCEAPISECRET;
@@ -13,7 +14,7 @@ const futureClient = new USDMClient({
   beautifyResponses: true,
 });
 
-const wsClient = new WebsocketClient(
+const wsBinanceClient = new WebsocketClient(
   {
     api_key: key,
     api_secret: secret,
@@ -23,250 +24,242 @@ const wsClient = new WebsocketClient(
   },
   {
     ...DefaultLogger,
-    silly: (...params) => {},
   }
 );
 
 let availableWalletUSDT = 0;
 let openOrders = [];
-let lastOrderSent = {};
 let isReady = false;
-let client = null;
-let lastNotify = new Date(new Date().getTime() - 10000);
+let telegramClient = null;
+let isRunning = true;
 
-const messageRecived = async (message) => {
-  client = message.client;
+const sendSignal = async (signal) => {
+  try {
+    isReady = false;
 
-  if (!isReady) {
-    console.log("Sinal recusado pelo bot");
-    return;
-  }
+    await updateWalletAndOpenOrders();
 
-  const signal = isValidSignal(message);
+    if (openOrders.length > 0) {
+      console.log(
+        "Ordem não executada por já existir ordem em aberto na Binance."
+      );
+      isReady = true;
+      return;
+    }
 
-  if (signal) {
+    console.log(
+      parseFloat(signal.quantityUSDT),
+      parseFloat(availableWalletUSDT)
+    );
+
+    if (parseFloat(signal.quantityUSDT) > parseFloat(availableWalletUSDT)) {
+      console.log("Ordem não executada por falta de saldo.");
+      isReady = true;
+      return;
+    }
+
     try {
-      if (openOrders.length > 0) {
-        console.log(
-          "Ordem não executada por já existir ordem em aberto na Binance."
-        );
-        return;
-      }
-
-      if (parseFloat(signal.quantityUSDT) > parseFloat(availableWalletUSDT)) {
-        console.log("Ordem não executada por falta de saldo.");
-        return;
-      }
-
-      isReady = false;
-
-      try {
-        await futureClient.setMarginType({
-          marginType: "ISOLATED",
-          symbol: signal.symbol,
-        });
-      } catch (error) {
-        // Dont do nothing
-      }
-
-      await futureClient.setLeverage({
-        leverage: signal.leverage,
+      await futureClient.setMarginType({
+        marginType: "ISOLATED",
         symbol: signal.symbol,
       });
-
-      try {
-        const mainOrder = {
-          type: "LIMIT",
-          workingType: "MARK_PRICE",
-          quantity: signal.quantity,
-          side: signal.side,
-          symbol: signal.symbol,
-          price: signal.entryPrice,
-          positionSide: "BOTH",
-          timeInForce: "GTC",
-        };
-
-        const stopLossOrder = {
-          type: "STOP_MARKET",
-          side: signal.side === "BUY" ? "SELL" : "BUY",
-          workingType: "MARK_PRICE",
-          positionSide: "BOTH",
-          timeInForce: "GTC",
-          priceProtect: "TRUE",
-          closePosition: "true",
-          quantity: signal.quantity,
-          symbol: signal.symbol,
-          stopPrice: signal.stopLossPrice,
-        };
-
-        const takeProfitOrder = {
-          type: "TAKE_PROFIT_MARKET",
-          side: signal.side === "BUY" ? "SELL" : "BUY",
-          workingType: "MARK_PRICE",
-          positionSide: "BOTH",
-          timeInForce: "GTC",
-          priceProtect: "TRUE",
-          closePosition: "true",
-          quantity: signal.quantity,
-          symbol: signal.symbol,
-          stopPrice: signal.takeProfitPrice,
-        };
-
-        const ordersRes = await futureClient.submitMultipleOrders([
-          mainOrder,
-          stopLossOrder,
-          takeProfitOrder,
-        ]);
-
-        let hasError = false;
-
-        ordersRes.map((order, i) => {
-          if (!order.orderId) {
-            hasError = true;
-            console.log(`Erro ao enviar ordem: ${i}`, order);
-            if (i === 0) console.log(mainOrder);
-            else if (i === 1) console.log(stopLossOrder);
-            else if (i === 2) console.log(takeProfitOrder);
-          }
-        });
-
-        if (hasError) {
-          await futureClient.cancelAllOpenOrders({
-            symbol: signal.symbol,
-          });
-        } else {
-          lastOrderSent = mainOrder;
-          const feedBackMessage = `Ordem de ${mainOrder.side} para o par ${mainOrder.symbol} enviada para a corretora.`;
-          notifyUser(feedBackMessage);
-          isReady = true;
-        }
-      } catch (error) {
-        await futureClient.cancelAllOpenOrders({
-          symbol: signal.symbol,
-        });
-        console.log("houve um problema para enviar os sinais", error);
-        isReady = true;
-      }
-      isReady = true;
     } catch (error) {
-      isReady = true;
-      console.log(error);
+      // do nothing
     }
-  } else {
-    console.log("This message isn't a signal");
+
+    await futureClient.setLeverage({
+      leverage: signal.leverage,
+      symbol: signal.symbol,
+    });
+
+    const mainOrder = {
+      type: "LIMIT",
+      workingType: "MARK_PRICE",
+      quantity: signal.quantity,
+      side: signal.side,
+      symbol: signal.symbol,
+      price: signal.entryPrice,
+      positionSide: "BOTH",
+      timeInForce: "GTC",
+    };
+
+    const stopLossOrder = {
+      type: "STOP_MARKET",
+      side: signal.side === "BUY" ? "SELL" : "BUY",
+      workingType: "MARK_PRICE",
+      positionSide: "BOTH",
+      timeInForce: "GTC",
+      priceProtect: "TRUE",
+      closePosition: "true",
+      quantity: signal.quantity,
+      symbol: signal.symbol,
+      stopPrice: signal.stopLossPrice,
+    };
+
+    const takeProfitOrder = {
+      type: "TAKE_PROFIT_MARKET",
+      side: signal.side === "BUY" ? "SELL" : "BUY",
+      workingType: "MARK_PRICE",
+      positionSide: "BOTH",
+      timeInForce: "GTC",
+      priceProtect: "TRUE",
+      closePosition: "true",
+      quantity: signal.quantity,
+      symbol: signal.symbol,
+      stopPrice: signal.takeProfitPrice,
+    };
+
+    const ordersRes = await futureClient.submitMultipleOrders([
+      mainOrder,
+      stopLossOrder,
+      takeProfitOrder,
+    ]);
+
+    let hasError = false;
+
+    ordersRes.map((order, i) => {
+      if (!order.orderId) {
+        hasError = true;
+        console.log(`Erro ao enviar ordem:`, order);
+        if (i === 0) console.log(mainOrder);
+        else if (i === 1) console.log(stopLossOrder);
+        else if (i === 2) console.log(takeProfitOrder);
+      }
+    });
+
+    if (hasError) {
+      await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
+      await updateWalletAndOpenOrders();
+    } else {
+      const feedBackMessage = `Ordem de ${mainOrder.side} para o par ${mainOrder.symbol} enviada para a corretora.`;
+      notifyUser(feedBackMessage);
+    }
+    isReady = true;
+  } catch (error) {
+    await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
+    await updateWalletAndOpenOrders();
+    console.log("houve um problema para enviar os sinais", error);
+    isReady = true;
   }
 };
 
-const activeListeners = async () => {
-  wsClient.on("reply", (data) => {
-    console.log("log reply: ", JSON.stringify(data, null, 2));
-  });
-  wsClient.on("reconnecting", (data) => {
-    console.log("ws automatically reconnecting.... ", data?.wsKey);
-  });
-  wsClient.on("reconnected", (data) => {
-    console.log("ws has reconnected ", data?.wsKey);
-  });
-  wsClient.on("error", (data) => {
-    console.log("ws saw error ", data?.wsKey);
-  });
-  await wsClient.subscribeUsdFuturesUserDataStream();
-  await updateWalletAndOpenOrders();
+const startBot = async (telegramClientt) => {
+  try {
+    isReady = false;
+    telegramClient = telegramClientt;
+    await wsBinanceClient.subscribeUsdFuturesUserDataStream();
+    await updateWalletAndOpenOrders();
 
-  notifyUser(`**Bot iniciado!**\n${openOrders.length / 2} orden(s) abertas.\nSaldo de ${availableWalletUSDT}`);
+    //await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
 
-  wsClient.on("formattedMessage", async (data) => {
-    if (data.eventType === "ORDER_TRADE_UPDATE") {
-      //se bater o win ou los, realizar o cancelamento de todas as demais entradas.
-      await updateWalletAndOpenOrders();
-      await verifyAndCancelOrdes();
-    }
-  });
+    telegramClient.addEventHandler(async ({ message }) => {
+      if (!isRunning) {
+        console.log("Sinal recusado porque o bot não está rodando");
+        return;
+      }
+      if (!isReady) {
+        console.log("Sinal recusado pelo bot");
+        return;
+      }
+
+      const signal = isValidSignal(message.message);
+
+      if (signal) await sendSignal(signal);
+      else console.log("Esta mensagem não é um sinal");
+    }, new NewMessage({ chats: [-816838568] }));
+
+    // Resultado da posição
+    wsBinanceClient.on("formattedMessage", async (data) => {
+      if (
+        data.eventType === "ACCOUNT_UPDATE" &&
+        data.updateData &&
+        data.updateData.updatedPositions.length > 0 &&
+        data.updateData.updatedPositions[0].accumulatedRealisedPreFee !== 0
+      ) {
+        console.log(
+          data.updateData.updatedPositions[0].accumulatedRealisedPreFee
+        );
+        //console.log(data.order.orderSide, data.order.orderStatus, data.order.orderType, data.order.orderStatus, data.order.isReduceOnly
+        // console.log(data.order);
+        // console.log(data.order.symbol);
+        // console.log(data.order.orderStatus);
+        // console.log(data.order.tradeId);
+        // console.log(data.order.commissionAmount);
+        await futureClient.cancelAllOpenOrders({
+          symbol: data.updateData.updatedPositions[0].symbol,
+        });
+        await updateWalletAndOpenOrders();
+        if (data.updateData.updatedPositions[0].accumulatedRealisedPreFee > 0) {
+          const feedBackMessage = `Ordem com ✅**lucro**✅ de USD ${data.updateData.updatedPositions[0].accumulatedRealisedPreFee} 💸💸💸💸`;
+          notifyUser(feedBackMessage);
+        } else {
+          const feedBackMessage = `Ordem com 🟥**prejuízo**🟥 de USD ${data.updateData.updatedPositions[0].accumulatedRealisedPreFee}`;
+          notifyUser(feedBackMessage);
+        }
+      }
+    });
+
+    telegramClient.addEventHandler(async ({ message }) => {
+      if (String(message.message).toLocaleLowerCase() === "start") {
+        isRunning = true;
+        notifyUser(
+          `O bot agora está ✅**RODANDO**✅, envie 'stop' ou 'start' quando quiser para alterar seu status.`
+        );
+      } else if (String(message.message).toLocaleLowerCase() === "stop") {
+        isRunning = false;
+        notifyUser(
+          `O bot agora está 🔴**PARADO**🔴, envie 'stop' ou 'start' quando quiser para alterar seu status.`
+        );
+      }
+    }, new NewMessage({ chats: ["me"] }));
+
+    let botStartMessage = `✅**O bot agora está RODANDO!**✅\n`;
+    botStartMessage += `\nExiste uma orden aberta.`;
+    botStartMessage += `\nSaldo de ${availableWalletUSDT} 🤑`;
+    botStartMessage += `\nEnvie 'stop' ou 'start' quando quiser para alterar seu status.`;
+
+    notifyUser(botStartMessage);
+    isReady = true;
+  } catch (error) {
+    console.log("Erro no método que inicializa o robo");
+    notifyUser(`**HOUVE UM ERRO AO INICIAR O BOT!**\n - **Bot PARADO!**\n`);
+    process.exit();
+  }
 };
 
 //verificar o tempo das ordens em aberto, se tiver 3 com mais de 30 minutos, cancelá-las para liberar banca.
 const updateWalletAndOpenOrders = async () => {
   try {
-    isReady = false;
     const allBalance = await futureClient.getBalance();
     allBalance.forEach((asset) => {
       if (asset.asset === "USDT")
-        availableWalletUSDT = parseFloat(asset.availableBalance).toFixed(2);
+        availableWalletUSDT = parseFloat(asset.maxWithdrawAmount).toFixed(2);
     });
     openOrders = await futureClient.getAllOpenOrders();
-    if (openOrders.length > 0) await verifyAndCancelOrdes();
-    else
-      console.log(
-        openOrders.length,
-        "Ordens em aberto",
-        "Saldo USDT: ",
-        availableWalletUSDT
-      );
-    isReady = true;
+    console.log(
+      openOrders.length,
+      "Ordens em aberto",
+      "Saldo USDT: ",
+      availableWalletUSDT
+    );
   } catch (error) {
-    isReady = true;
-    console.log("Error to update wallet and open orders.");
+    console.log(
+      "Erro no método de atualizar saldo e capturar ordens em aberta."
+    );
   }
-};
-
-const verifyAndCancelOrdes = async () => {
-  //Cancel protections
-  if (openOrders.length === 1) {
-    await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
-    if (
-      openOrders[0].side === "BUY" &&
-      openOrders[0].stopPrice > parseFloat(lastOrderSent.price)
-    ) {
-      const feedBackMessage = `Ordem ${openOrders[0].side} - ${openOrders[0].symbol} com lucro, saldo atual: ${availableWalletUSDT}`;
-      notifyUser(feedBackMessage);
-    } else {
-      const feedBackMessage = `Ordem ${openOrders[0].side} - ${openOrders[0].symbol} com prejuízo, saldo atual: ${availableWalletUSDT}`;
-      notifyUser(feedBackMessage);
-    }
-  }
-
-  //Cancel old signal if diference is bigest 30 minutes
-  else if (openOrders.length === 3) {
-    try {
-      const signalDate = new Date(openOrders[0].time * 1000);
-      const nowDate = new Date();
-      const difMinutes = minutesDiference(signalDate, nowDate);
-      if (difMinutes >= 30) {
-        await futureClient.cancelAllOpenOrders({
-          symbol: openOrders[0].symbol,
-        });
-        console.log(
-          "O bot cancelou uma ordem que estava a muito tempo para entrar."
-        );
-      }
-    } catch (error) {
-      console.log("Houve um erro ao finalizar as ordens paradas");
-    }
-  }
-
-  console.log(
-    openOrders.length,
-    "Ordens em aberto",
-    "Saldo USDT: ",
-    availableWalletUSDT
-  );
 };
 
 const notifyUser = (message) => {
-  const secondsLastNotify = secondsDiference(lastNotify, new Date());
-  if (secondsLastNotify >= 3) {
+  try {
     console.log(message);
-    setTimeout(function () {
-      if (client) {
-        client.sendMessage("me", { message });
-      }
-    }, 3000);
-
-    lastNotify = new Date();
+    if (telegramClient) {
+      telegramClient.sendMessage("me", { message });
+    }
+  } catch (error) {
+    console.log("Erro no método de notificação");
   }
 };
 
 module.exports = {
-  messageRecived,
-  activeListeners,
+  startBot,
 };

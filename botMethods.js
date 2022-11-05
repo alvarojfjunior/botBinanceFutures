@@ -12,53 +12,56 @@ const isValidSignal = (message) => {
 };
 
 const testSignal = (message) => {
-  const arrString = String(message.message).split(/\r?\n/);
+  const arrString = String(message).split(/\r?\n/);
 
   if (arrString.length < 2) return false
 
   let signal = {};
-  const leverage = arrString[6].slice(
-    arrString[6].indexOf(":") + 2,
-    arrString[6].length
-  );
-  const strQtdr = String(
-    parseFloat(
-      arrString[10].slice(arrString[10].indexOf(":") + 2, arrString[10].length)
-    )
-  );
-  const assetDecimal = strQtdr.length - 1 - strQtdr.indexOf(".");
-  const quantity = (parseFloat(strQtdr) * unidade * parseInt(leverage)).toFixed(
-    assetDecimal
-  );
-  const symbol = arrString[4].slice(
-    arrString[4].indexOf(":") + 2,
-    arrString[4].length
-  );
-  signal.quantity = quantity;
-  signal.quantityUSDT = parseFloat(
-    arrString[9].slice(arrString[9].indexOf(":") + 2, arrString[9].length)
-  ).toFixed(2)
-
-  signal.side = arrString[3].slice(
-    arrString[3].indexOf(":") + 2,
-    arrString[3].length
-  );
-  signal.symbol = symbol;
-  signal.entryPrice = arrString[5].slice(
+  const leverage = arrString[5].slice(
     arrString[5].indexOf(":") + 2,
     arrString[5].length
   );
-  signal.takeProfitPrice = arrString[8].slice(
-    arrString[8].indexOf(":") + 2,
-    arrString[8].length
+  const strQuantity = String(
+    parseFloat(
+      arrString[9].slice(arrString[9].indexOf(":") + 2, arrString[9].length)
+    )
   );
-  signal.stopLossPrice = arrString[7].slice(
+
+  const assetDecimal = strQuantity.length - 1 - strQuantity.indexOf(".");
+
+  const quantity = (parseFloat(strQuantity) * unidade * parseInt(leverage)).toFixed(
+    assetDecimal
+  );
+  
+  const symbol = arrString[3].slice(
+    arrString[3].indexOf(":") + 2,
+    arrString[3].length
+  );
+  signal.quantity = quantity;
+  signal.quantityUSDT = parseFloat(
+    arrString[8].slice(arrString[8].indexOf(":") + 2, arrString[8].length)
+  ).toFixed(2)
+
+  signal.side = arrString[2].slice(
+    arrString[2].indexOf(":") + 2,
+    arrString[2].length
+  );
+  signal.symbol = symbol;
+  signal.entryPrice = arrString[4].slice(
+    arrString[4].indexOf(":") + 2,
+    arrString[4].length
+  );
+  signal.takeProfitPrice = arrString[7].slice(
     arrString[7].indexOf(":") + 2,
     arrString[7].length
   );
-  signal.leverage = arrString[6].slice(
+  signal.stopLossPrice = arrString[6].slice(
     arrString[6].indexOf(":") + 2,
     arrString[6].length
+  );
+  signal.leverage = arrString[5].slice(
+    arrString[5].indexOf(":") + 2,
+    arrString[5].length
   );
 
   return isAllProperiesValid(signal);
