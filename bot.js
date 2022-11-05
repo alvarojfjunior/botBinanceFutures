@@ -47,11 +47,6 @@ const sendSignal = async (signal) => {
       return;
     }
 
-    console.log(
-      parseFloat(signal.quantityUSDT),
-      parseFloat(availableWalletUSDT)
-    );
-
     if (parseFloat(signal.quantityUSDT) > parseFloat(availableWalletUSDT)) {
       console.log("Ordem não executada por falta de saldo.");
       isReady = true;
@@ -176,24 +171,17 @@ const startBot = async (telegramClientt) => {
         data.updateData.updatedPositions.length > 0 &&
         data.updateData.updatedPositions[0].accumulatedRealisedPreFee !== 0
       ) {
-        console.log(
-          data.updateData.updatedPositions[0].accumulatedRealisedPreFee
-        );
-        //console.log(data.order.orderSide, data.order.orderStatus, data.order.orderType, data.order.orderStatus, data.order.isReduceOnly
-        // console.log(data.order);
-        // console.log(data.order.symbol);
-        // console.log(data.order.orderStatus);
-        // console.log(data.order.tradeId);
-        // console.log(data.order.commissionAmount);
         await futureClient.cancelAllOpenOrders({
           symbol: data.updateData.updatedPositions[0].symbol,
         });
         await updateWalletAndOpenOrders();
         if (data.updateData.updatedPositions[0].accumulatedRealisedPreFee > 0) {
-          const feedBackMessage = `Ordem com ✅**lucro**✅ de USD ${data.updateData.updatedPositions[0].accumulatedRealisedPreFee} 💸💸💸💸`;
+          let feedBackMessage = `Ordem com ✅**lucro**✅ de USD ${data.updateData.updatedPositions[0].accumulatedRealisedPreFee} 💸💸💸💸`;
+          feedBackMessage += `\nSaldo atual: ${availableWalletUSDT}`
           notifyUser(feedBackMessage);
         } else {
-          const feedBackMessage = `Ordem com 🟥**prejuízo**🟥 de USD ${data.updateData.updatedPositions[0].accumulatedRealisedPreFee}`;
+          let feedBackMessage = `Ordem com 🟥**prejuízo**🟥 de USD ${data.updateData.updatedPositions[0].accumulatedRealisedPreFee}`;
+          feedBackMessage += `\nSaldo atual: ${availableWalletUSDT}`
           notifyUser(feedBackMessage);
         }
       }
