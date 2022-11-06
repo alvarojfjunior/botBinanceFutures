@@ -29,6 +29,7 @@ const wsBinanceClient = new WebsocketClient(
 
 let availableWalletUSDT = 0;
 let openOrders = [];
+let isOpenPosition = false;
 let isReady = false;
 let telegramClient = null;
 let isRunning = true;
@@ -39,7 +40,7 @@ const sendSignal = async (signal) => {
 
     await updateWalletAndOpenOrders();
 
-    if (openOrders.length > 0) {
+    if (openOrders.length > 0 || isOpenPosition) {
       console.log(
         "Ordem não executada por já existir ordem em aberto na Binance."
       );
@@ -169,7 +170,10 @@ const startBot = async (telegramClientt) => {
         data.eventType === "ACCOUNT_UPDATE" &&
         data.updateData &&
         data.updateData.updatedPositions.length > 0 &&
-        data.updateData.updatedPositions[0].accumulatedRealisedPreFee !== 0
+        data.updateData.updatedPositions[0].accumulatedRealisedPreFee !== 0 &&
+        data.updateData.updatedPositions[0].positionAmount === 0 &&
+        isOpenPosition &&
+        openOrders.length > 0
       ) {
         await futureClient.cancelAllOpenOrders({
           symbol: data.updateData.updatedPositions[0].symbol,
@@ -202,10 +206,10 @@ const startBot = async (telegramClientt) => {
     }, new NewMessage({ chats: ["me"] }));
 
     let botStartMessage = `✅**O bot agora está RODANDO!**✅\n`;
-    botStartMessage += `\nExiste uma orden aberta.`;
+    botStartMessage += `\nExistem ${openOrders.length} orden(s) aberta(s).`;
+    botStartMessage += `\n${isOpenPosition ? 'Existe posição em aberto' : 'Não existem posições em aberto'}`;
     botStartMessage += `\nSaldo de USD ${availableWalletUSDT} 🤑`;
     botStartMessage += `\nEnvie 'stop' ou 'start' quando quiser para alterar seu status.`;
-
     notifyUser(botStartMessage);
     isReady = true;
   } catch (error) {
@@ -220,16 +224,19 @@ const updateWalletAndOpenOrders = async () => {
   try {
     const allBalance = await futureClient.getBalance();
     allBalance.forEach((asset) => {
-      if (asset.asset === "USDT")
-        availableWalletUSDT = parseFloat(asset.maxWithdrawAmount).toFixed(2);
+      if (asset.asset === "USDT") {
+        if (Math.abs(parseFloat(asset.balance) - parseFloat(asset.availableBalance)) > 2) {
+          isOpenPosition = true
+        } else {
+          isOpenPosition = false
+        }
+        availableWalletUSDT = parseFloat(asset.balance).toFixed(2);
+      }
     });
     openOrders = await futureClient.getAllOpenOrders();
-    console.log(
-      openOrders.length,
-      "Ordens em aberto",
-      "Saldo USDT: ",
-      availableWalletUSDT
-    );
+
+    console.log(openOrders.length, "Ordens em aberto");
+    console.log("Saldo USDT: ", availableWalletUSDT);
   } catch (error) {
     console.log(
       "Erro no método de atualizar saldo e capturar ordens em aberta."
