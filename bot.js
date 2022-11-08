@@ -2,7 +2,7 @@ const { isValidSignal } = require("./botMethods.js");
 const dotenv = require("dotenv");
 dotenv.config();
 const { USDMClient, WebsocketClient, DefaultLogger } = require("binance");
-const { minutesDiference, secondsDiference } = require("./utils.js");
+const cron = require("node-cron");
 const { NewMessage } = require("telegram/events/NewMessage.js");
 
 const key = process.env.BINANCEAPIKEY;
@@ -29,7 +29,7 @@ const wsBinanceClient = new WebsocketClient(
 
 let availableWalletUSDT = 0;
 let openOrders = [];
-let isOpenPosition = false;
+let openPositions = [];
 let isReady = false;
 let telegramClient = null;
 let isRunning = true;
@@ -40,7 +40,7 @@ const sendSignal = async (signal) => {
 
     await updateWalletAndOpenOrders();
 
-    if (openOrders.length > 0 || isOpenPosition) {
+    if (openOrders.length > 0) {
       console.log(
         "Ordem não executada por já existir ordem em aberto na Binance."
       );
@@ -124,15 +124,17 @@ const sendSignal = async (signal) => {
     });
 
     if (hasError) {
-      await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
+      await futureClient.cancelAllOpenOrders({ symbol: mainOrder.symbol });
       await updateWalletAndOpenOrders();
     } else {
+      await updateWalletAndOpenOrders();
       const feedBackMessage = `Ordem de ${mainOrder.side} para o par ${mainOrder.symbol} enviada para a corretora.`;
       notifyUser(feedBackMessage);
     }
+
     isReady = true;
   } catch (error) {
-    await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
+    await futureClient.cancelAllOpenOrders({ symbol: mainOrder.symbol });
     await updateWalletAndOpenOrders();
     console.log("houve um problema para enviar os sinais", error);
     isReady = true;
@@ -144,7 +146,7 @@ const startBot = async (telegramClientt) => {
     isReady = false;
     telegramClient = telegramClientt;
     await wsBinanceClient.subscribeUsdFuturesUserDataStream();
-    await updateWalletAndOpenOrders();
+    await closeOldOrders();
 
     //await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
 
@@ -160,45 +162,45 @@ const startBot = async (telegramClientt) => {
 
       const signal = isValidSignal(message.message);
 
-      if (signal) await sendSignal(signal);
-      else console.log("Esta mensagem não é um sinal");
+      if (signal) {
+        await sendSignal(signal);
+      } else {
+        console.log("Esta mensagem não é um sinal");
+        isReady = true;
+      }
     }, new NewMessage({ chats: [-816838568] }));
 
     // Resultado da posição
     wsBinanceClient.on("formattedMessage", async (data) => {
       if (
         data.eventType === "ACCOUNT_UPDATE" &&
-        data.updateData &&
         data.updateData.updatedPositions.length > 0 &&
-        data.updateData.updatedPositions[0].accumulatedRealisedPreFee !== 0 &&
-        data.updateData.updatedPositions[0].positionAmount === 0 &&
-        isOpenPosition &&
-        openOrders.length > 0
+        openPositions.length > 0 &&
+        openPositions[0].symbol === data.updateData.updatedPositions[0].symbol
       ) {
-        await futureClient.cancelAllOpenOrders({
-          symbol: data.updateData.updatedPositions[0].symbol,
-        });
-        await updateWalletAndOpenOrders();
+        // Houve um encerramento de posição
+        await closeOldOrders();
+
         if (data.updateData.updatedPositions[0].accumulatedRealisedPreFee > 0) {
-          let feedBackMessage = `Ordem com ✅**lucro**✅ de USD ${data.updateData.updatedPositions[0].accumulatedRealisedPreFee} 💸💸💸💸`;
-          feedBackMessage += `\nSaldo atual: ${availableWalletUSDT}`
+          let feedBackMessage = `Ordem ${data.updateData.updatedPositions[0].symbol} com ✅**lucro**✅ de USD ${data.updateData.updatedPositions[0].accumulatedRealisedPreFee} 💸💸💸💸`;
+          feedBackMessage += `\nSaldo atual: ${availableWalletUSDT}`;
           notifyUser(feedBackMessage);
+          isReady = true;
         } else {
-          let feedBackMessage = `Ordem com 🟥**prejuízo**🟥 de USD ${data.updateData.updatedPositions[0].accumulatedRealisedPreFee}`;
-          feedBackMessage += `\nSaldo atual: ${availableWalletUSDT}`
+          let feedBackMessage = `Ordem ${data.updateData.updatedPositions[0].symbol} com 🟥**prejuízo**🟥 de USD ${data.updateData.updatedPositions[0].accumulatedRealisedPreFee}`;
+          feedBackMessage += `\nSaldo atual: ${availableWalletUSDT}`;
           notifyUser(feedBackMessage);
+          isReady = true;
         }
       }
     });
 
     telegramClient.addEventHandler(async ({ message }) => {
       if (String(message.message).toLocaleLowerCase() === "start") {
-        isRunning = true;
         notifyUser(
           `O bot agora está ✅**RODANDO**✅, envie 'stop' ou 'start' quando quiser para alterar seu status.`
         );
       } else if (String(message.message).toLocaleLowerCase() === "stop") {
-        isRunning = false;
         notifyUser(
           `O bot agora está 🔴**PARADO**🔴, envie 'stop' ou 'start' quando quiser para alterar seu status.`
         );
@@ -206,8 +208,8 @@ const startBot = async (telegramClientt) => {
     }, new NewMessage({ chats: ["me"] }));
 
     let botStartMessage = `✅**O bot agora está RODANDO!**✅\n`;
+    botStartMessage += `\nExistem ${openPositions.length} posições(s) aberta(s).`;
     botStartMessage += `\nExistem ${openOrders.length} orden(s) aberta(s).`;
-    botStartMessage += `\n${isOpenPosition ? 'Existe posição em aberto' : 'Não existem posições em aberto'}`;
     botStartMessage += `\nSaldo de USD ${availableWalletUSDT} 🤑`;
     botStartMessage += `\nEnvie 'stop' ou 'start' quando quiser para alterar seu status.`;
     notifyUser(botStartMessage);
@@ -225,18 +227,17 @@ const updateWalletAndOpenOrders = async () => {
     const allBalance = await futureClient.getBalance();
     allBalance.forEach((asset) => {
       if (asset.asset === "USDT") {
-        if (Math.abs(parseFloat(asset.balance) - parseFloat(asset.availableBalance)) > 2) {
-          isOpenPosition = true
-        } else {
-          isOpenPosition = false
-        }
         availableWalletUSDT = parseFloat(asset.balance).toFixed(2);
       }
     });
     openOrders = await futureClient.getAllOpenOrders();
+    openPositions = await futureClient.getPrivate("fapi/v2/positionRisk");
+    openPositions = openPositions.filter((p) => p.entryPrice > 0);
 
-    console.log(openOrders.length, "Ordens em aberto");
-    console.log("Saldo USDT: ", availableWalletUSDT);
+    let botStartMessage = `\nExistem ${openPositions.length} posições(s) aberta(s).`;
+    botStartMessage += `\nExistem ${openOrders.length} orden(s) aberta(s).`;
+    botStartMessage += `\nSaldo de USD ${availableWalletUSDT} 🤑`;
+    notifyUser(botStartMessage);
   } catch (error) {
     console.log(
       "Erro no método de atualizar saldo e capturar ordens em aberta."
@@ -254,6 +255,33 @@ const notifyUser = (message) => {
     console.log("Erro no método de notificação");
   }
 };
+
+const closeOldOrders = async () => {
+  try {
+    await updateWalletAndOpenOrders();
+    if (openPositions.length === 0 && openOrders.length === 3) {
+      notifyUser("Aguardando para entrar no sinal");
+    } else if (openPositions.length === 1 && openOrders.length === 2) {
+      notifyUser("Plena operação, uma posição em andamento");
+    } else if (openPositions.length > 0 && (openOrders.length === 1 || openOrders.length === 3) ) {
+      notifyUser(
+        "Existe uma posição sem proteção, verifique na plataforma Binance."
+      );
+    } else if (openPositions.length === 0 && openOrders.length > 0) {
+      notifyUser("Ordem(s) orfã(s)s apagadas.");
+      await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
+      await updateWalletAndOpenOrders();
+    } else {
+      notifyUser(`Não fez nada no close posição: ${openPositions.length} - Ordens: ${openOrders.length}`)
+    }
+  } catch (error) {
+    console.log("Error to run cron");
+  }
+};
+
+cron.schedule("*/5 * * * *", async () => {
+  await closeOldOrders();
+});
 
 module.exports = {
   startBot,
