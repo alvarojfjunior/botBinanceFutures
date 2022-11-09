@@ -175,6 +175,7 @@ const startBot = async (telegramClientt) => {
       if (
         data.eventType === "ACCOUNT_UPDATE" &&
         data.updateData.updatedPositions.length > 0 &&
+        data.updateData.updatedPositions[0].accumulatedRealisedPreFee != 0 &&
         openPositions.length > 0 &&
         openPositions[0].symbol === data.updateData.updatedPositions[0].symbol
       ) {
@@ -233,11 +234,6 @@ const updateWalletAndOpenOrders = async () => {
     openOrders = await futureClient.getAllOpenOrders();
     openPositions = await futureClient.getPrivate("fapi/v2/positionRisk");
     openPositions = openPositions.filter((p) => p.entryPrice > 0);
-
-    let botStartMessage = `\nExistem ${openPositions.length} posições(s) aberta(s).`;
-    botStartMessage += `\nExistem ${openOrders.length} orden(s) aberta(s).`;
-    botStartMessage += `\nSaldo de USD ${availableWalletUSDT} 🤑`;
-    notifyUser(botStartMessage);
   } catch (error) {
     console.log(
       "Erro no método de atualizar saldo e capturar ordens em aberta."
