@@ -63,6 +63,8 @@ const sendSignal = async (signal) => {
       // do nothing
     }
 
+    console.log(signal)
+
     await futureClient.setLeverage({
       leverage: signal.leverage,
       symbol: signal.symbol,
@@ -134,9 +136,10 @@ const sendSignal = async (signal) => {
 
     isReady = true;
   } catch (error) {
-    await futureClient.cancelAllOpenOrders({ symbol: mainOrder.symbol });
-    await updateWalletAndOpenOrders();
     console.log("houve um problema para enviar os sinais", error);
+    await updateWalletAndOpenOrders();
+    if (openOrders.length > 0)
+      await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
     isReady = true;
   }
 };
@@ -259,7 +262,10 @@ const closeOldOrders = async () => {
       notifyUser("Aguardando para entrar no sinal");
     } else if (openPositions.length === 1 && openOrders.length === 2) {
       notifyUser("Plena operação, uma posição em andamento");
-    } else if (openPositions.length > 0 && (openOrders.length === 1 || openOrders.length === 3) ) {
+    } else if (
+      openPositions.length > 0 &&
+      (openOrders.length === 1 || openOrders.length === 3)
+    ) {
       notifyUser(
         "Existe uma posição sem proteção, verifique na plataforma Binance."
       );
@@ -268,7 +274,9 @@ const closeOldOrders = async () => {
       await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
       await updateWalletAndOpenOrders();
     } else {
-      notifyUser(`Não fez nada no close posição: ${openPositions.length} - Ordens: ${openOrders.length}`)
+      notifyUser(
+        `Não fez nada no close posição: ${openPositions.length} - Ordens: ${openOrders.length}`
+      );
     }
   } catch (error) {
     console.log("Error to run cron");
