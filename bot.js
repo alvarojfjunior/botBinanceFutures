@@ -130,7 +130,7 @@ const sendSignal = async (signal) => {
       await updateWalletAndOpenOrders();
     } else {
       await updateWalletAndOpenOrders();
-      const feedBackMessage = `Ordem de ${mainOrder.side} para o par ${mainOrder.symbol} enviada para a corretora.`;
+      const feedBackMessage = `Ordem de ${mainOrder.side} para o par ${mainOrder.symbol} enviada para a Binance.`;
       notifyUser(feedBackMessage);
     }
 
