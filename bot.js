@@ -220,7 +220,7 @@ const startBot = async (telegramClientt) => {
     isReady = true;
   } catch (error) {
     console.log("Erro no método que inicializa o robo");
-    notifyUser(`**HOUVE UM ERRO AO INICIAR O BOT!**\n - **Bot PARADO!**\n`);
+    notifyUser(`**HOUVE UM ERRO AO INICIAR O BOT!**\n - **Bot PARADO, PROCURE O SUPORTE TÉCNICO.**\n`);
     process.exit();
   }
 };
@@ -259,22 +259,22 @@ const closeOldOrders = async () => {
   try {
     await updateWalletAndOpenOrders();
     if (openPositions.length === 0 && openOrders.length === 3) {
-      notifyUser("Aguardando para entrar no sinal");
+      console.log("Aguardando para entrar no sinal");
     } else if (openPositions.length === 1 && openOrders.length === 2) {
-      notifyUser("Plena operação, uma posição em andamento");
+      console.log("Plena operação, uma posição em andamento");
     } else if (
       openPositions.length > 0 &&
       (openOrders.length === 1 || openOrders.length === 3)
     ) {
       notifyUser(
-        "Existe uma posição sem proteção, verifique na plataforma Binance."
+        "Existe uma posição sem proteção, verifique na plataforma Binance. Encerre manualmente na Binance quando houver lucro."
       );
     } else if (openPositions.length === 0 && openOrders.length > 0) {
-      notifyUser("Ordem(s) orfã(s)s apagadas.");
+      console.log("Ordem(s) orfã(s)s apagadas.");
       await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
       await updateWalletAndOpenOrders();
     } else {
-      notifyUser(
+      console.log(
         `Não fez nada no close posição: ${openPositions.length} - Ordens: ${openOrders.length}`
       );
     }
