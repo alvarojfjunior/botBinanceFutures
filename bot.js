@@ -275,7 +275,7 @@ const closeOldOrders = async () => {
       await updateWalletAndOpenOrders();
     } else {
       console.log(
-        `Não fez nada no close posição: ${openPositions.length} - Ordens: ${openOrders.length}`
+        `Não fez nada. Posições: ${openPositions.length} - Ordens: ${openOrders.length}`
       );
     }
   } catch (error) {
