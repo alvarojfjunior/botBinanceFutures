@@ -63,8 +63,6 @@ const sendSignal = async (signal) => {
       // do nothing
     }
 
-    console.log(signal)
-
     await futureClient.setLeverage({
       leverage: signal.leverage,
       symbol: signal.symbol,
@@ -143,7 +141,7 @@ const sendSignal = async (signal) => {
     isReady = true;
   }
 };
-
+isRunning
 const startBot = async (telegramClientt) => {
   try {
     isReady = false;
@@ -201,13 +199,23 @@ const startBot = async (telegramClientt) => {
 
     telegramClient.addEventHandler(async ({ message }) => {
       if (String(message.message).toLocaleLowerCase() === "start") {
+        isRunning = true
         notifyUser(
           `O bot agora está ✅**RODANDO**✅, envie 'stop' ou 'start' quando quiser para alterar seu status.`
         );
       } else if (String(message.message).toLocaleLowerCase() === "stop") {
+        isRunning = false
         notifyUser(
           `O bot agora está 🔴**PARADO**🔴, envie 'stop' ou 'start' quando quiser para alterar seu status.`
         );
+      } else if (String(message.message).toLocaleLowerCase() === "status") {
+        await updateWalletAndOpenOrders();
+        let botStatusMessage = `**O bot está ${isRunning ? 'RODANDO' : 'PARADO'}!**\n`;
+        botStatusMessage += `\nEnvie 'stop' ou 'start' quando quiser para alterar seu status.` 
+        botStatusMessage += `\nExistem ${openPositions.length} posições(s) aberta(s).`;
+        botStatusMessage += `\nExistem ${openOrders.length} orden(s) aberta(s).`;
+        botStatusMessage += `\nSaldo de USD ${availableWalletUSDT} 🤑`;
+        notifyUser(botStatusMessage);
       }
     }, new NewMessage({ chats: ["me"] }));
 
@@ -215,12 +223,14 @@ const startBot = async (telegramClientt) => {
     botStartMessage += `\nExistem ${openPositions.length} posições(s) aberta(s).`;
     botStartMessage += `\nExistem ${openOrders.length} orden(s) aberta(s).`;
     botStartMessage += `\nSaldo de USD ${availableWalletUSDT} 🤑`;
-    botStartMessage += `\nEnvie 'stop' ou 'start' quando quiser para alterar seu status.`;
+    botStartMessage += `\nEnvie 'status' para saber se o bot está em plena operação ou 'stop' e 'start' quando quiser alterar seu status de operação.`;
     notifyUser(botStartMessage);
     isReady = true;
   } catch (error) {
     console.log("Erro no método que inicializa o robo");
-    notifyUser(`**HOUVE UM ERRO AO INICIAR O BOT!**\n - **Bot PARADO, PROCURE O SUPORTE TÉCNICO.**\n`);
+    notifyUser(
+      `**HOUVE UM ERRO AO INICIAR O BOT!**\n - **Bot PARADO, PROCURE O SUPORTE TÉCNICO.**\n`
+    );
     process.exit();
   }
 };

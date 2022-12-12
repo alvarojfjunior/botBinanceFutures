@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "forever stopall && forever start index.js",
-    "logs": "forever logs index.js -f",
+    "dev": "node index.js",
+    "start": "npm run stop & forever start index.js",
+    "logs": "forever logs index.js -f &",
     "stop": "forever stop index.js"
   },
   "keywords": [],
