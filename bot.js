@@ -4,6 +4,7 @@ dotenv.config();
 const { USDMClient, WebsocketClient, DefaultLogger } = require("binance");
 const cron = require("node-cron");
 const { NewMessage } = require("telegram/events/NewMessage.js");
+const moment = require("moment/moment.js");
 
 const key = process.env.BINANCEAPIKEY;
 const secret = process.env.BINANCEAPISECRET;
@@ -141,7 +142,7 @@ const sendSignal = async (signal) => {
     isReady = true;
   }
 };
-isRunning
+isRunning;
 const startBot = async (telegramClientt) => {
   try {
     isReady = false;
@@ -199,19 +200,21 @@ const startBot = async (telegramClientt) => {
 
     telegramClient.addEventHandler(async ({ message }) => {
       if (String(message.message).toLocaleLowerCase() === "start") {
-        isRunning = true
+        isRunning = true;
         notifyUser(
           `O bot agora está ✅**RODANDO**✅, envie 'stop' ou 'start' quando quiser para alterar seu status.`
         );
       } else if (String(message.message).toLocaleLowerCase() === "stop") {
-        isRunning = false
+        isRunning = false;
         notifyUser(
           `O bot agora está 🔴**PARADO**🔴, envie 'stop' ou 'start' quando quiser para alterar seu status.`
         );
       } else if (String(message.message).toLocaleLowerCase() === "status") {
         await updateWalletAndOpenOrders();
-        let botStatusMessage = `**O bot está ${isRunning ? 'RODANDO' : 'PARADO'}!**\n`;
-        botStatusMessage += `\nEnvie 'stop' ou 'start' quando quiser para alterar seu status.` 
+        let botStatusMessage = `**O bot está ${
+          isRunning ? "RODANDO" : "PARADO"
+        }!**\n`;
+        botStatusMessage += `\nEnvie 'stop' ou 'start' quando quiser para alterar seu status.`;
         botStatusMessage += `\nExistem ${openPositions.length} posições(s) aberta(s).`;
         botStatusMessage += `\nExistem ${openOrders.length} orden(s) aberta(s).`;
         botStatusMessage += `\nSaldo de USD ${availableWalletUSDT} 🤑`;
@@ -269,7 +272,20 @@ const closeOldOrders = async () => {
   try {
     await updateWalletAndOpenOrders();
     if (openPositions.length === 0 && openOrders.length === 3) {
-      console.log("Aguardando para entrar no sinal");
+      //cancelamento automático
+      if (openOrders.length === 3) {
+        const timeOrder = moment(new Date(openOrders[0].time));
+        const timeNow = moment();
+        const minDiff = timeNow.diff(timeOrder, "minutes");
+        if (minDiff >= 30) {
+          const lastOrder = openOrders[0]
+          await futureClient.cancelAllOpenOrders({
+            symbol: openOrders[0].symbol,
+          });
+          await updateWalletAndOpenOrders();
+          notifyUser(`A ordem ${lastOrder.symbol} foi encerrada automaticamente por tempo excedido. Não houve lucro nem prejuízo.`);
+        }
+      } else console.log("Aguardando para entrar no sinal");
     } else if (openPositions.length === 1 && openOrders.length === 2) {
       console.log("Plena operação, uma posição em andamento");
     } else if (
