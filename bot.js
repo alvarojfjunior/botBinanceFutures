@@ -252,7 +252,7 @@ const updateWalletAndOpenOrders = async () => {
     openPositions = openPositions.filter((p) => p.entryPrice > 0);
   } catch (error) {
     console.log(
-      "Erro no método de atualizar saldo e capturar ordens em aberta."
+      "Erro no método de atualizar saldo e capturar ordens em aberta.", error
     );
   }
 };
