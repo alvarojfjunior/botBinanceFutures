@@ -8,7 +8,8 @@
     "url": "https://github.com/alvarojfjunior/botBinanceFutures.git"
   },
   "scripts": {
-    "deploy-production": "pm2 deploy ecosystem.config.js production --force",
+    "prod:start": "pm2-runtime index.js",
+    "local:start": "pm2 start index.js",
     "deploy": "git pull & npm i & node index.js",
     "start": "node index.js"
   },
