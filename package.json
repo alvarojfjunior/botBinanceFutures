@@ -8,7 +8,7 @@
     "url": "https://github.com/alvarojfjunior/botBinanceFutures.git"
   },
   "scripts": {
-    "prod:start": "pm2-runtime index.js",
+    "prod:start": "pm2-runtime idnex.js",
     "local:start": "pm2 start index.js",
     "deploy": "git pull & npm i & node index.js",
     "start": "node index.js"
