@@ -170,7 +170,7 @@ const startBot = async (telegramClientt) => {
         console.log("Esta mensagem não é um sinal");
         isReady = true;
       }
-    }, new NewMessage({ chats: [-1635748933] }));
+    }, new NewMessage({ chats: [-831855575] }));
 
     // Resultado da posição
     wsBinanceClient.on("formattedMessage", async (data) => {

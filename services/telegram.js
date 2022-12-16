@@ -27,7 +27,12 @@ const connectTelegram = async () => {
         await input.text("Please enter the code you received: "),
       onError: (err) => console.log(err),
     });
-    console.log("Telegram access string = ", client.session.save());
+
+    console.log(
+      `O Telegram do ${process.env.NAME} foi ativo com uma conta de telegram. String Session: \n`
+    );
+    console.log(client.session.save());
+
     return client;
   } catch (error) {
     return false;
