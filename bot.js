@@ -37,23 +37,22 @@ let isRunning = true;
 
 const sendSignal = async (signal) => {
   try {
-    isReady = false;
-
     await updateWalletAndOpenOrders();
 
     if (openOrders.length > 0) {
       console.log(
         "Ordem não executada por já existir ordem em aberto na Binance."
       );
-      isReady = true;
+      isReady = false;
       return;
     }
 
     if (parseFloat(signal.quantityUSDT) > parseFloat(availableWalletUSDT)) {
       console.log("Ordem não executada por falta de saldo.");
-      isReady = true;
       return;
     }
+
+    isReady = false;
 
     try {
       await futureClient.setMarginType({
@@ -133,22 +132,29 @@ const sendSignal = async (signal) => {
       notifyUser(feedBackMessage);
     }
 
-    isReady = true;
+    if (openOrders.length > 0) isReady = false;
+    else isReady = true;
   } catch (error) {
     console.log("houve um problema para enviar os sinais", error);
     await updateWalletAndOpenOrders();
     if (openOrders.length > 0)
       await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
-    isReady = true;
+
+    await updateWalletAndOpenOrders();
+    if (openOrders.length > 0) isReady = false;
+    else isReady = true;
   }
 };
-isRunning;
+
 const startBot = async (telegramClientt) => {
   try {
     isReady = false;
     telegramClient = telegramClientt;
     await wsBinanceClient.subscribeUsdFuturesUserDataStream();
     await closeOldOrders();
+
+    if (openOrders.length > 0) isReady = false;
+    else isReady = true;
 
     //await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
 
@@ -168,7 +174,6 @@ const startBot = async (telegramClientt) => {
         await sendSignal(signal);
       } else {
         console.log("Esta mensagem não é um sinal");
-        isReady = true;
       }
     }, new NewMessage({ chats: [-831855575] }));
 
@@ -250,10 +255,15 @@ const updateWalletAndOpenOrders = async () => {
     openOrders = await futureClient.getAllOpenOrders();
     openPositions = await futureClient.getPrivate("fapi/v2/positionRisk");
     openPositions = openPositions.filter((p) => p.entryPrice > 0);
+    if (openOrders.length > 0) isReady = false;
+    else isReady = true;
   } catch (error) {
     console.log(
-      "Erro no método de atualizar saldo e capturar ordens em aberta.", error
+      "Erro no método de atualizar saldo e capturar ordens em aberta.",
+      error
     );
+    if (openOrders.length > 0) isReady = false;
+    else isReady = true;
   }
 };
 
@@ -278,12 +288,14 @@ const closeOldOrders = async () => {
         const timeNow = moment();
         const minDiff = timeNow.diff(timeOrder, "minutes");
         if (minDiff >= 30) {
-          const lastOrder = openOrders[0]
+          const lastOrder = openOrders[0];
           await futureClient.cancelAllOpenOrders({
             symbol: openOrders[0].symbol,
           });
           await updateWalletAndOpenOrders();
-          notifyUser(`A ordem ${lastOrder.symbol} foi encerrada automaticamente por tempo excedido. Não houve lucro nem prejuízo.`);
+          notifyUser(
+            `A ordem ${lastOrder.symbol} foi encerrada automaticamente por tempo excedido. Não houve lucro nem prejuízo.`
+          );
         }
       } else console.log("Aguardando para entrar no sinal");
     } else if (openPositions.length === 1 && openOrders.length === 2) {
