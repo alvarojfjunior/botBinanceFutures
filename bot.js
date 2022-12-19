@@ -125,13 +125,12 @@ const sendSignal = async (signal) => {
 
     if (hasError) {
       await futureClient.cancelAllOpenOrders({ symbol: mainOrder.symbol });
-      await updateWalletAndOpenOrders();
     } else {
-      await updateWalletAndOpenOrders();
       const feedBackMessage = `Ordem de ${mainOrder.side} para o par ${mainOrder.symbol} enviada para a Binance.`;
       notifyUser(feedBackMessage);
     }
 
+    await updateWalletAndOpenOrders();
     if (openOrders.length > 0) isReady = false;
     else isReady = true;
   } catch (error) {
@@ -139,7 +138,6 @@ const sendSignal = async (signal) => {
     await updateWalletAndOpenOrders();
     if (openOrders.length > 0)
       await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
-
     await updateWalletAndOpenOrders();
     if (openOrders.length > 0) isReady = false;
     else isReady = true;
@@ -262,8 +260,6 @@ const updateWalletAndOpenOrders = async () => {
       "Erro no método de atualizar saldo e capturar ordens em aberta.",
       error
     );
-    if (openOrders.length > 0) isReady = false;
-    else isReady = true;
   }
 };
 
@@ -281,7 +277,21 @@ const notifyUser = (message) => {
 const closeOldOrders = async () => {
   try {
     await updateWalletAndOpenOrders();
-    if (openPositions.length === 0 && openOrders.length === 3) {
+
+    //  Nada a fazer, o bot está pronto.
+    if (openPositions.length === 0 && openOrders.length === 0) {
+      console.log("Nada a fazer");
+      isReady = true;
+    } 
+    
+    //Nada a fazer, o bot não está pronto.
+    else if (openPositions.length === 1 && openOrders.length === 2) {
+      console.log("Plena operação, uma posição em andamento");
+      isReady = false;
+    } 
+    
+    //Pode cancelar o sinal por vencimento ou não.
+    else if (openPositions.length === 0 && openOrders.length === 3) {
       //cancelamento automático
       if (openOrders.length === 3) {
         const timeOrder = moment(new Date(openOrders[0].time));
@@ -296,26 +306,31 @@ const closeOldOrders = async () => {
           notifyUser(
             `A ordem ${lastOrder.symbol} foi encerrada automaticamente por tempo excedido. Não houve lucro nem prejuízo.`
           );
+          isReady = true;
         }
-      } else console.log("Aguardando para entrar no sinal");
-    } else if (openPositions.length === 1 && openOrders.length === 2) {
-      console.log("Plena operação, uma posição em andamento");
-    } else if (
-      openPositions.length > 0 &&
-      (openOrders.length === 1 || openOrders.length === 3)
-    ) {
-      notifyUser(
-        "Existe uma posição sem proteção, verifique na plataforma Binance. Encerre manualmente na Binance quando houver lucro."
-      );
-    } else if (openPositions.length === 0 && openOrders.length > 0) {
-      console.log("Ordem(s) orfã(s)s apagadas.");
+      } else {
+        console.log("Aguardando para entrar no sinal");
+        isReady = false;
+      }
+    } 
+    
+    // Encerra as proteções
+    else if (openPositions.length === 0 && openOrders.length > 0) {
       await futureClient.cancelAllOpenOrders({ symbol: openOrders[0].symbol });
       await updateWalletAndOpenOrders();
-    } else {
-      console.log(
-        `Não fez nada. Posições: ${openPositions.length} - Ordens: ${openOrders.length}`
+      console.log("Ordem(s) orfã(s)s apagadas.");
+      isReady = true
+    } 
+    
+    // Algo de errado, envia mensagem para o usuário.
+    else {
+      isReady = false
+      notifyUser(
+        "Existe algo de errados com suas entradas, verifique manualmente em https://www.binance.com/en/futures"
       );
     }
+
+
   } catch (error) {
     console.log("Error to run cron");
   }
